@@ -1,19 +1,47 @@
 package controllers
 
 import com.google.inject.Inject
-import controllers.actions.authAction
-import models.LoginService
-import models.dto.ProductDTO
-import play.api.mvc.{Action, Controller}
+import models.ProductService
+import models.dto.Mappings._
+import models.dto.{ProductCreateDTO, ProductDTO}
+import play.api.http.Writeable
+import play.api.libs.json.Writes
+import play.api.mvc.{Action, AnyContent, Controller}
 
-class ProductController @Inject()(loginService: LoginService) extends Controller{
+import scala.util.{Failure, Success, Try}
 
-  def list() = authAction(loginService){ ur =>
-    Ok(views.html.products.list(List(
-      ProductDTO("1", "foo1", "bar1"),
-      ProductDTO("2", "foo2", "bar2"),
-      ProductDTO("3", "foo3", "bar3"),
-      ProductDTO("4", "foo4", "bar4")
-    )))
+class ProductController @Inject()(productService: ProductService) extends Controller{
+
+  implicit def writeable[T](implicit writes: Writes[T]): Writeable[T] =
+    new Writeable[T](Writeable.writeableOf_JsValue.transform compose writes.writes, Some(JSON))
+
+  def list(id: Option[String], title: Option[String]): Action[AnyContent] = Action { rc =>
+    Try(productService.list(id, title)) match {
+      case Success(value) => Ok(value)
+      case Failure(exception) => InternalServerError(exception.getMessage)
+    }
+  }
+
+  def create(): Action[ProductCreateDTO] = Action(parse.json[ProductCreateDTO]) { rc =>
+    val productCreateDTO: ProductCreateDTO = rc.body
+    Try(productService.create(productCreateDTO)) match {
+      case Success(value) => Ok(value)
+      case Failure(exception) => InternalServerError(exception.getMessage)
+    }
+  }
+  def delete(productId: String): Action[AnyContent] = Action { rc =>
+      Try(productService.delete(productId)) match {
+        case Failure(exception: ClassNotFoundException) => NotFound(exception.getMessage)
+        case Success(value) => Ok(value)
+        case Failure(exception) => InternalServerError(exception.getMessage)
+      }
+  }
+  def update(): Action[ProductDTO] =  Action(parse.json[ProductDTO]) { rc =>
+    val productDTO: ProductDTO = rc.body
+    Try(productService.update(productDTO)) match {
+      case Failure(exception: ClassNotFoundException) => NotFound(exception.getMessage)
+      case Success(value) => Ok(value)
+      case Failure(exception) => InternalServerError(exception.getMessage)
+    }
   }
 }
